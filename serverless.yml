@@ -1,0 +1,48 @@
+service: profiles-test
+frameworkVersion: '2'
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: us-east-2
+  iamRoleStatements:
+    - Effect: Allow
+      Action: dynamodb:BatchWrite*
+      Resource: !GetAtt ProfilesTable.Arn
+
+functions:
+  loadProfiles:
+    handler: loadProfiles.handle
+    timeout: 900
+
+package:
+  exclude:
+    - local_scripts/**
+
+resources:
+  Resources:
+    ProfilesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: accountId
+            AttributeType: S
+          - AttributeName: profileId
+            AttributeType: S
+          - AttributeName: accountsSK
+            AttributeType: S
+        KeySchema:
+          - AttributeName: accountId
+            KeyType: HASH
+          - AttributeName: accountsSK
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: profiles_dev
+            KeySchema:
+              - AttributeName: profileId
+                KeyType: HASH
+            Projection:
+              ProjectionType: 'ALL'
+        TableName: accounts_profiles_dev
