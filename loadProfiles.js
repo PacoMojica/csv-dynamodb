@@ -5,16 +5,15 @@ const handle = async event => {
 
   try {
     console.log('Download started')
-    const fileName = '/tmp/asdf.zip'
-    await downloadFile('https://aws-techmentoring-paco.s3.amazonaws.com/asdf.zip', fileName)
+    await downloadFile()
     console.log('Download done')
 
     console.log('Unzip started')
-    await unzipFile(fileName, '/tmp')
+    await unzipFile()
     console.log('Unzip done')
 
     console.log('Start loading postcodes into DynamoDB')
-    await processFile('/tmp/asdf.csv')
+    await processFile()
   } catch (error) {
     console.error(error)
   }

@@ -1,19 +1,24 @@
 const AWS = require('aws-sdk')
 const fs = require('fs')
 const readline = require('readline')
-const https = require('https')
 const extract = require('extract-zip')
 
-const batchSize = 25
-const concurrentRequests = 40
+const BATCH_SIZE = 25
+const CONCURRENT_REQUESTS = 40
+const s3Params = { Bucket: 'aws-techmentoring-paco', Key: 'asdf.zip' }
+
+const ZIP_NAME = '/tmp/asdf.zip'
+const CSV_TARGET_DIR = '/tmp'
+const CSV_NAME = '/tmp/asdf.csv'
 
 process.env.AWS_NODEJS_CONNECTION_REUSE_ENABLED = 1
 
 const dynamodb = new AWS.DynamoDB.DocumentClient()
+const s3 = new AWS.S3({ apiVersion: '2006-03-01' })
 
-function isNumeric(str) {
+function isNumeric (str) {
   return (
-    typeof str == "string" &&
+    typeof str === 'string' &&
     !isNaN(str) &&
     !isNaN(parseInt(str))
   )
@@ -31,7 +36,7 @@ function convertToObject (line) {
     createdAt: items[7],
     updatedAt: items[8],
     birthdate: items[9],
-    age: isNumeric(items[10]) ? parseInt(items[10]) : '',
+    age: isNumeric(items[10]) ? parseInt(items[10]) : ''
   }
 }
 
@@ -44,15 +49,15 @@ async function saveToDynamoDB (items) {
 
   const req = {
     RequestItems: {
-      ['accounts_profiles_dev']: putReqs
+      accounts_profiles_dev: putReqs
     }
   }
 
   await dynamodb.batchWrite(req).promise()
 }
 
-async function processFile (fileName) {
-  const readStream = fs.createReadStream(fileName, { encoding: 'utf8' })
+async function processFile () {
+  const readStream = fs.createReadStream(CSV_NAME, { encoding: 'utf8' })
   const rl = readline.createInterface({
     input: readStream,
     crlfDelay: Infinity
@@ -62,21 +67,19 @@ async function processFile (fileName) {
   let items = []
   let promises = []
   let i = 0
+
   for await (const line of rl) {
     if (firstLine) {
       firstLine = false
       continue
     }
 
-    const obj = convertToObject(line)
-    if (obj) {
-      items.push(convertToObject(line))
-    }
+    items.push(convertToObject(line))
 
-    if (items.length % batchSize === 0) {
+    if (items.length % BATCH_SIZE === 0) {
       promises.push(saveToDynamoDB(items))
 
-      if (promises.length % concurrentRequests === 0) {
+      if (promises.length % CONCURRENT_REQUESTS === 0) {
         // console.log('awaiting write requests to DynamoDB')
         await Promise.all(promises)
         promises = []
@@ -102,24 +105,14 @@ async function processFile (fileName) {
   console.log('Total processed lines:', i)
 }
 
-async function downloadFile (url, fileName) {
-  const writableStream = fs.createWriteStream(fileName)
-  return new Promise((resolve, reject) => {
-    const request = https.get(url, function (response) {
-      response.pipe(writableStream)
-      response.on('end', () => {
-        writableStream.close()
-        resolve()
-      })
-    })
-
-    request.on('error', reject)
-  })
+async function downloadFile () {
+  const file = await s3.getObject(s3Params).promise()
+  fs.writeFileSync(ZIP_NAME, file.Body)
 }
 
-async function unzipFile (fileName, targetDir) {
-  await extract(fileName, {
-    dir: targetDir
+async function unzipFile () {
+  await extract(ZIP_NAME, {
+    dir: CSV_TARGET_DIR
   })
 }
 
